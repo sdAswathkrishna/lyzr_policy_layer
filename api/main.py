@@ -18,10 +18,10 @@ from api.routes.policies import router as policies_router
 from api.routes.audit import router as audit_router
 
 app = FastAPI(
-    title="Lyzr Policy Enforcement Layer",
+    title="Lyzr User/Org Policy Gateway",
     description=(
-        "POC control-plane that adds IAM-style governance to Lyzr agents. "
-        "Integrated with Lyzr REST APIs — not inside Lyzr's native runtime."
+        "POC control-plane that evaluates user/org policies for governed tool "
+        "calls and governed retrieval before Lyzr inference."
     ),
     version="0.1.0",
 )
@@ -47,7 +47,7 @@ def startup():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "lyzr-policy-layer"}
+    return {"status": "ok", "service": "lyzr-policy-gateway"}
 
 
 app.include_router(agents_router)

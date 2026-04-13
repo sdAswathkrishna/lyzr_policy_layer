@@ -1,235 +1,178 @@
 """
-Data Access Control (internal component of Policy Enforcement Layer)
-
-Controls what data an agent is allowed to see or use before the prompt reaches Lyzr.
-
-Primary control: explicit metadata on the request:
-  - data_classification: public | internal | internal-finance | internal-hr | confidential | restricted
-  - data_owner: who owns this data
-  - allowed_roles: which roles may access this data
-
-Fallback: basic prompt scanning for data-class keywords (not the primary mechanism).
-
-Deny behaviors per policy:
-  - deny:   hard block, return PolicyDeniedResponse immediately
-  - redact: strip classified fields from the request, continue with sanitized prompt
-  - filter: remove classified content inline, continue
-
-This is an internal component of the unified Policy Enforcement Layer.
-It wraps the Lyzr API call — it is NOT a native Lyzr hook.
+Gateway orchestration for governed tool calls and governed retrieval.
 """
 
 from __future__ import annotations
 
+import base64
+import json
 from typing import Any, Optional
 
 from .evaluator import PolicyEvaluator
+from .lyzr_client import LyzrClient
 from .models import (
     ChatRequest,
-    DataClassification,
+    ChatResponse,
     Decision,
-    DenyBehavior,
     EvalResult,
     IdentityContext,
     PolicyAction,
     PolicyDeniedResponse,
-    PolicyScope,
+    RetrievalContext,
 )
 
-# Data classifications that require explicit policy checks (escalating sensitivity)
-_SENSITIVE_CLASSIFICATIONS = {
-    DataClassification.INTERNAL,
-    DataClassification.INTERNAL_FINANCE,
-    DataClassification.INTERNAL_HR,
-    DataClassification.CONFIDENTIAL,
-    DataClassification.RESTRICTED,
-}
 
-# Fallback: keyword patterns that suggest specific data classes
-_KEYWORD_CLASSIFICATION_MAP = {
-    DataClassification.INTERNAL_FINANCE: [
-        "revenue", "profit", "loss", "budget", "financial", "invoice",
-        "payroll", "salary", "fiscal", "accounting", "ledger",
-    ],
-    DataClassification.INTERNAL_HR: [
-        "employee", "headcount", "performance review", "termination",
-        "salary band", "compensation", "pii", "ssn", "social security",
-    ],
-    DataClassification.CONFIDENTIAL: [
-        "confidential", "nda", "trade secret", "proprietary",
-    ],
-    DataClassification.RESTRICTED: [
-        "restricted", "classified", "top secret",
-    ],
-}
-
-
-class DataAccessControl:
-    """
-    Evaluates data access control policies before a request reaches Lyzr.
-    Internal component of the unified Policy Enforcement Layer.
-
-    Usage:
-        control = DataAccessControl()
-        result, denied_response = control.check(request)
-        if denied_response:
-            return denied_response   # don't call Lyzr
-        # Use result.deny_behavior == DenyBehavior.REDACT → sanitize request
-        # Use result.deny_behavior == DenyBehavior.FILTER → strip content
-    """
-
-    def __init__(self, evaluator: Optional[PolicyEvaluator] = None):
+class PolicyGateway:
+    def __init__(
+        self,
+        lyzr_client: LyzrClient,
+        evaluator: Optional[PolicyEvaluator] = None,
+    ):
+        self._client = lyzr_client
         self._evaluator = evaluator or PolicyEvaluator()
 
-    def check(
+    def enforce_and_chat(
         self,
         request: ChatRequest,
-        identity: Optional[IdentityContext] = None,
-    ) -> tuple[EvalResult, Optional[PolicyDeniedResponse]]:
-        """
-        Run data access control checks.
+        identity: IdentityContext,
+        policy_trace: list[EvalResult],
+    ) -> ChatResponse | PolicyDeniedResponse:
+        effective_message = request.message
 
-        Args:
-            request:  the incoming chat request with metadata labels
-            identity: shared IdentityContext generated once in the route.
-                      If None, a local one is built from the request (backward-compat).
+        if request.retrieval_request:
+            retrieval_result, approved_contexts = self._evaluate_retrieval(request.retrieval_request.contexts, identity)
+            policy_trace.extend(retrieval_result)
+            denied = next((item for item in retrieval_result if item.decision == Decision.DENY), None)
+            if denied:
+                return PolicyDeniedResponse(
+                    action=PolicyAction.RETRIEVE_CONTEXT,
+                    resource=request.retrieval_request.contexts[0].context_tag if request.retrieval_request.contexts else "unknown",
+                    reason=denied.reason,
+                    matched_policy_ids=denied.matched_policy_ids,
+                    request_id=identity.request_id,
+                    audit_id=denied.audit_id or identity.request_id,
+                )
+            if approved_contexts:
+                context_blob = "\n\n".join(
+                    f"[Context {ctx.context_id} | {ctx.context_tag}]\n{ctx.text}" for ctx in approved_contexts
+                )
+                effective_message = f"{request.message}\n\nApproved retrieval context:\n{context_blob}"
 
-        Returns:
-            (eval_result, denied_response)
-            If denied_response is not None, the request must be blocked.
-            If denied_response is None, inspect eval_result.deny_behavior
-            to decide whether to redact/filter the request or pass as-is.
-        """
-        if identity is None:
-            identity = IdentityContext(
-                request_id=request.session_id,
-                invoking_user_id=request.invoking_user_id,
-                active_agent_id=request.agent_id,
-                tenant_id=request.tenant_id,
+        if request.governed_tool_call:
+            tool_context = {
+                **request.governed_tool_call.input,
+                **request.context_fields,
+                "tool_name": request.governed_tool_call.tool_name,
+            }
+            tool_result = self._evaluator.evaluate(
+                action=PolicyAction.TOOL_CALL,
+                resource=request.governed_tool_call.tool_name,
+                identity=identity,
+                input_context=tool_context,
             )
+            policy_trace.append(tool_result)
+            if tool_result.decision == Decision.DENY:
+                return PolicyDeniedResponse(
+                    action=PolicyAction.TOOL_CALL,
+                    resource=request.governed_tool_call.tool_name,
+                    reason=tool_result.reason,
+                    matched_policy_ids=tool_result.matched_policy_ids,
+                    request_id=identity.request_id,
+                    audit_id=tool_result.audit_id or identity.request_id,
+                )
 
-        # Determine effective classification (explicit label takes precedence)
-        classification = request.data_classification
-
-        # Fallback: scan prompt for data-class keywords if classification is PUBLIC
-        if classification == DataClassification.PUBLIC:
-            classification = self._infer_classification(request.message)
-
-        # PUBLIC data with no sensitive classification → skip policy check, always allow
-        if classification == DataClassification.PUBLIC:
-            return (
-                EvalResult(
-                    decision=Decision.ALLOW,
-                    reason="Data classification: public — no policy check required",
-                ),
-                None,
-            )
-
-        # Build context fields for CONTEXT_MATCH conditions
-        context_fields: dict[str, Any] = {
-            "data_classification": classification.value,
-            "data_owner": request.data_owner or "",
-            "allowed_roles": request.allowed_roles,
-            **request.context_fields,
-        }
-
-        result = self._evaluator.evaluate(
-            scope=PolicyScope.ENFORCEMENT,
-            action=PolicyAction.ACCESS_DATA,
-            resource=classification.value,
+        # Message content policy check — runs before every Lyzr call
+        content_result = self._evaluator.evaluate(
+            action=PolicyAction.INPUT_CONTENT,
+            resource="message",
             identity=identity,
-            context_fields=context_fields,
+            input_context={"message_text": effective_message},
+        )
+        if content_result.decision == Decision.DENY:
+            policy_trace.append(content_result)
+            return PolicyDeniedResponse(
+                action=PolicyAction.INPUT_CONTENT,
+                resource="message",
+                reason=content_result.reason,
+                matched_policy_ids=content_result.matched_policy_ids,
+                request_id=identity.request_id,
+                audit_id=content_result.audit_id or identity.request_id,
+            )
+
+        lyzr_resp = self._client.chat(
+            agent_id=request.agent_id,
+            session_id=request.session_id,
+            message=effective_message,
+            user_id=identity.user_id,
+        )
+        return ChatResponse(
+            response=lyzr_resp.get("response", ""),
+            request_id=identity.request_id,
+            effective_prompt=effective_message,
+            policy_trace=policy_trace,
         )
 
-        if result.decision == Decision.DENY:
-            behavior = result.deny_behavior or DenyBehavior.DENY
-
-            if behavior == DenyBehavior.DENY:
-                denied = PolicyDeniedResponse(
-                    layer=PolicyScope.ENFORCEMENT,
-                    reason=result.reason,
-                    policy_id=result.matched_policy_id,
-                    policy_name=result.matched_policy_name,
-                    deny_behavior=behavior,
-                    request_id=identity.request_id,
-                    audit_id=result.audit_id or identity.request_id,
-                )
-                return result, denied
-
-            # REDACT / FILTER: do not hard-block — caller must sanitize
-            return result, None
-
-        return result, None
-
-    @staticmethod
-    def _infer_classification(message: str) -> DataClassification:
-        """
-        Keyword-based fallback classification. Returns the most sensitive
-        classification found, or PUBLIC if none match.
-        Only used when the caller did not set an explicit classification.
-        """
-        lower = message.lower()
-        # Check in order of sensitivity (most restrictive first)
-        for cls in [
-            DataClassification.RESTRICTED,
-            DataClassification.CONFIDENTIAL,
-            DataClassification.INTERNAL_FINANCE,
-            DataClassification.INTERNAL_HR,
-            DataClassification.INTERNAL,
-        ]:
-            keywords = _KEYWORD_CLASSIFICATION_MAP.get(cls, [])
-            if any(kw in lower for kw in keywords):
-                return cls
-        return DataClassification.PUBLIC
-
-    @staticmethod
-    def sanitize_request(request: ChatRequest, deny_behavior: DenyBehavior) -> ChatRequest:
-        """
-        Apply REDACT or FILTER behavior to the request.
-        Returns a modified copy of the request with sensitive content removed.
-
-        FILTER surgically strips individual sentences that contain classified keywords,
-        ensuring classified content does not reach the Lyzr model context.
-        """
-        if deny_behavior == DenyBehavior.REDACT:
-            # Hard redact: replace entire message body
-            return request.model_copy(
-                update={
-                    "data_classification": DataClassification.PUBLIC,
-                    "data_owner": None,
-                    "message": "[REDACTED: classified content removed by policy enforcement layer]",
-                }
+    def _evaluate_retrieval(
+        self,
+        contexts: list[RetrievalContext],
+        identity: IdentityContext,
+    ) -> tuple[list[EvalResult], list[RetrievalContext]]:
+        results: list[EvalResult] = []
+        approved: list[RetrievalContext] = []
+        for item in contexts:
+            input_context: dict[str, Any] = {
+                "classification": item.classification,
+                "context_tag": item.context_tag,
+                "context_org_id": item.org_id,
+                **item.metadata,
+            }
+            result = self._evaluator.evaluate(
+                action=PolicyAction.RETRIEVE_CONTEXT,
+                resource=item.context_tag,
+                identity=identity,
+                input_context=input_context,
             )
-        elif deny_behavior == DenyBehavior.FILTER:
-            # Fix 3: scan for sentences containing classified keywords and strip them.
-            # Build a flat set of all sensitive keywords from _KEYWORD_CLASSIFICATION_MAP.
-            all_sensitive_keywords: set[str] = set()
-            for kws in _KEYWORD_CLASSIFICATION_MAP.values():
-                all_sensitive_keywords.update(kws)
+            results.append(result)
+            if result.decision == Decision.DENY:
+                return results, approved
+            approved.append(item)
+        return results, approved
 
-            # Split into sentences (naive split on . ! ? and newlines)
-            import re
-            sentences = re.split(r'(?<=[.!?\n])\s+', request.message)
-            clean_sentences: list[str] = []
-            filtered_count = 0
-            for sentence in sentences:
-                lower = sentence.lower()
-                if any(kw in lower for kw in all_sensitive_keywords):
-                    clean_sentences.append("[FILTERED]")
-                    filtered_count += 1
-                else:
-                    clean_sentences.append(sentence)
 
-            filtered_message = " ".join(clean_sentences)
-            # If everything was filtered, make it explicit
-            if filtered_count == len(sentences):
-                filtered_message = "[FILTERED: all content contained classified data]"
+def resolve_identity(request: ChatRequest, headers: dict[str, str], request_id: str) -> IdentityContext:
+    jwt_user, jwt_org = _identity_from_bearer(headers.get("authorization"))
+    header_user = headers.get("x-user-id")
+    header_org = headers.get("x-org-id") or headers.get("x-rgid")
 
-            return request.model_copy(
-                update={
-                    "data_classification": DataClassification.PUBLIC,
-                    "data_owner": None,
-                    "message": filtered_message,
-                }
-            )
-        return request
+    user_id = jwt_user or header_user or request.user_id
+    org_id = jwt_org or header_org or request.org_id or request.rgid or "default-org"
+    auth_source = "jwt" if jwt_user or jwt_org else "headers" if header_user or header_org else "body"
+    if not user_id:
+        raise ValueError("user_id is required for policy evaluation")
+
+    return IdentityContext(
+        request_id=request_id,
+        user_id=user_id,
+        org_id=org_id,
+        session_id=request.session_id,
+        agent_id=request.agent_id,
+        auth_source=auth_source,
+    )
+
+
+def _identity_from_bearer(authorization: Optional[str]) -> tuple[Optional[str], Optional[str]]:
+    if not authorization or not authorization.lower().startswith("bearer "):
+        return None, None
+    token = authorization.split(" ", 1)[1]
+    parts = token.split(".")
+    if len(parts) < 2:
+        return None, None
+    try:
+        payload = parts[1] + "=" * (-len(parts[1]) % 4)
+        decoded = base64.urlsafe_b64decode(payload.encode("utf-8"))
+        claims = json.loads(decoded)
+    except Exception:
+        return None, None
+    user_id = claims.get("user_id") or claims.get("sub")
+    org_id = claims.get("org_id") or claims.get("rgid")
+    return user_id, org_id

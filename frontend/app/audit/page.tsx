@@ -1,129 +1,329 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { listAudit, AuditEntry } from "@/lib/api";
+import { X, Filter, RefreshCw } from "lucide-react";
+import { AuditEntry, listAudit } from "@/lib/api";
+
+function DecisionBadge({ decision }: { decision: "allow" | "deny" }) {
+  return (
+    <span className={`badge badge-${decision}`}>
+      {decision === "allow" ? "ALLOW" : "DENY"}
+    </span>
+  );
+}
+
+function ActionBadge({ action }: { action: string }) {
+  return (
+    <span className="badge badge-neutral" style={{ fontFamily: "monospace", fontSize: 10 }}>
+      {action.replace(/_/g, " ")}
+    </span>
+  );
+}
 
 export default function AuditPage() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  // Filters
-  const [agentFilter, setAgentFilter] = useState("");
-  const [layerFilter, setLayerFilter] = useState("");
+  const [userFilter, setUserFilter] = useState("");
+  const [orgFilter, setOrgFilter] = useState("");
   const [decisionFilter, setDecisionFilter] = useState("");
   const [selected, setSelected] = useState<AuditEntry | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const refresh = () => {
     setLoading(true);
     listAudit({
       limit: 200,
-      agent_id: agentFilter || undefined,
-      layer: layerFilter || undefined,
+      user_id: userFilter || undefined,
+      org_id: orgFilter || undefined,
       decision: decisionFilter || undefined,
     })
       .then(setEntries)
-      .catch((e) => setError(e.message))
+      .catch(() => null)
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { refresh(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { refresh(); }, []);
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">Audit Log</h1>
+    <div style={{ display: "flex", flexDirection: "column", height: "calc(100vh - 72px)", maxWidth: 1200 }}>
+      {/* Header */}
+      <div className="page-header" style={{ marginBottom: 16, flexShrink: 0 }}>
+        <h1 className="page-title">Audit Log</h1>
+        <p className="page-subtitle">
+          Every policy evaluation — permit and forbid — is recorded here in real time.
+        </p>
+      </div>
 
-      {/* Filters */}
-      <div className="bg-white rounded-xl border shadow-sm p-4 mb-6 flex gap-3 items-end flex-wrap">
+      {/* Filter bar */}
+      <div
+        style={{
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: 10,
+          padding: "13px 16px",
+          marginBottom: 14,
+          display: "flex",
+          gap: 10,
+          alignItems: "flex-end",
+          flexWrap: "wrap",
+          boxShadow: "var(--shadow-xs)",
+          flexShrink: 0,
+        }}
+      >
+        <Filter size={14} style={{ color: "var(--text-muted)", alignSelf: "center", flexShrink: 0 }} />
         <div>
-          <label className="text-xs text-gray-500 block mb-1">Agent ID</label>
+          <label className="section-label">User ID</label>
           <input
-            className="border rounded px-2 py-1.5 text-sm font-mono w-52"
-            placeholder="Filter by agent ID…"
-            value={agentFilter}
-            onChange={(e) => setAgentFilter(e.target.value)}
+            className="input"
+            style={{ width: 180, fontFamily: "monospace", fontSize: 12 }}
+            placeholder="any"
+            value={userFilter}
+            onChange={(e) => setUserFilter(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && refresh()}
           />
         </div>
         <div>
-          <label className="text-xs text-gray-500 block mb-1">Decision</label>
-          <select className="border rounded px-2 py-1.5 text-sm" value={decisionFilter} onChange={(e) => setDecisionFilter(e.target.value)}>
+          <label className="section-label">Org ID</label>
+          <input
+            className="input"
+            style={{ width: 160, fontFamily: "monospace", fontSize: 12 }}
+            placeholder="any"
+            value={orgFilter}
+            onChange={(e) => setOrgFilter(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && refresh()}
+          />
+        </div>
+        <div>
+          <label className="section-label">Decision</label>
+          <select
+            className="select"
+            style={{ width: 120 }}
+            value={decisionFilter}
+            onChange={(e) => setDecisionFilter(e.target.value)}
+          >
             <option value="">All</option>
             <option value="allow">Allow</option>
             <option value="deny">Deny</option>
           </select>
         </div>
-        <button
-          onClick={refresh}
-          className="px-4 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
-        >
+        <button className="btn btn-secondary" onClick={refresh} style={{ gap: 6 }}>
+          <RefreshCw size={13} className={loading ? "spin" : ""} />
           Apply
         </button>
+        {entries.length > 0 && (
+          <span style={{ fontSize: 12, color: "var(--text-muted)", alignSelf: "center", marginLeft: 4 }}>
+            {entries.length} entries
+          </span>
+        )}
       </div>
 
-      {error && <p className="text-red-500 bg-red-50 rounded p-3 text-sm mb-4">{error}</p>}
-      {loading && <p className="text-gray-400 text-sm">Loading…</p>}
-
-      <div className="flex gap-6">
+      {/* Table + detail panel */}
+      <div style={{ display: "flex", gap: 14, flex: 1, minHeight: 0 }}>
         {/* Table */}
-        <div className="flex-1 bg-white rounded-xl border shadow-sm overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-gray-500 text-xs">
-              <tr>
-                {["Timestamp","Agent","User","Action","Resource","Policy","Decision","Latency","Reason"].map((h) => (
-                  <th key={h} className="px-3 py-2 text-left whitespace-nowrap">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {entries.length === 0 && !loading && (
+        <div
+          style={{
+            flex: 1,
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            overflow: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            boxShadow: "var(--shadow-xs)",
+            minWidth: 0,
+          }}
+        >
+          <div style={{ overflowX: "auto", flex: 1, overflowY: "auto" }}>
+            <table className="data-table" style={{ minWidth: 700 }}>
+              <thead style={{ position: "sticky", top: 0, zIndex: 1 }}>
                 <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-gray-400">
-                    No audit entries found. Run a chat to generate policy decisions.
-                  </td>
+                  {["Timestamp", "User", "Org", "Action", "Resource", "Decision", "Latency", "Reason"].map(
+                    (h) => <th key={h}>{h}</th>
+                  )}
                 </tr>
-              )}
-              {entries.map((entry) => (
-                <tr
-                  key={entry.id}
-                  className={`border-t hover:bg-gray-50 cursor-pointer ${selected?.id === entry.id ? "bg-indigo-50" : ""}`}
-                  onClick={() => setSelected(entry)}
-                >
-                  <td className="px-3 py-2 whitespace-nowrap text-gray-400">
-                    {new Date(entry.timestamp).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 font-mono text-xs">
-                    {entry.subject_identity.active_agent_id.slice(0, 10)}…
-                  </td>
-                  <td className="px-3 py-2 text-xs text-gray-500">
-                    {entry.subject_identity.invoking_user_id}
-                  </td>
-                  <td className="px-3 py-2 text-xs">{entry.action}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{entry.resource}</td>
-                  <td className="px-3 py-2 text-xs text-gray-500">
-                    {entry.matched_policy_id ? entry.matched_policy_id.slice(0, 8) + "…" : "—"}
-                  </td>
-                  <td className="px-3 py-2 font-semibold"
-                    style={{ color: entry.decision === "allow" ? "#16a34a" : "#dc2626" }}>
-                    {entry.decision.toUpperCase()}
-                  </td>
-                  <td className="px-3 py-2 text-xs text-gray-400">{entry.latency_ms}ms</td>
-                  <td className="px-3 py-2 text-xs text-gray-500 max-w-xs truncate">{entry.reason}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {entries.length === 0 && (
+                  <tr>
+                    <td
+                      colSpan={8}
+                      style={{ textAlign: "center", color: "var(--text-muted)", padding: "48px 0", fontSize: 13 }}
+                    >
+                      {loading ? "Loading…" : "No audit entries found."}
+                    </td>
+                  </tr>
+                )}
+                {entries.map((entry) => (
+                  <tr
+                    key={entry.id}
+                    style={{
+                      cursor: "pointer",
+                      background: selected?.id === entry.id ? "var(--accent-soft)" : undefined,
+                    }}
+                    onClick={() => setSelected((p) => (p?.id === entry.id ? null : entry))}
+                  >
+                    <td style={{ color: "var(--text-muted)", whiteSpace: "nowrap", fontSize: 12 }}>
+                      {new Date(entry.timestamp).toLocaleString()}
+                    </td>
+                    <td>
+                      <code style={{ fontSize: 11.5, color: "var(--text-primary)" }}>
+                        {entry.principal.user_id}
+                      </code>
+                    </td>
+                    <td>
+                      <code style={{ fontSize: 11.5, color: "var(--text-secondary)" }}>
+                        {entry.principal.org_id}
+                      </code>
+                    </td>
+                    <td><ActionBadge action={entry.action} /></td>
+                    <td>
+                      <code style={{ fontSize: 11.5 }}>{entry.resource}</code>
+                    </td>
+                    <td><DecisionBadge decision={entry.decision} /></td>
+                    <td style={{ color: "var(--text-muted)", fontSize: 12, whiteSpace: "nowrap" }}>
+                      {entry.latency_ms}ms
+                    </td>
+                    <td
+                      style={{
+                        maxWidth: 220,
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        fontSize: 12,
+                        color: "var(--text-muted)",
+                      }}
+                    >
+                      {entry.reason}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
         {/* Detail panel */}
         {selected && (
-          <div className="w-80 bg-white rounded-xl border shadow-sm p-4 shrink-0 self-start sticky top-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-sm">Audit Detail</h3>
-              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-700 text-xs">✕</button>
+          <div
+            style={{
+              width: 320,
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+              boxShadow: "var(--shadow-xs)",
+              flexShrink: 0,
+              alignSelf: "flex-start",
+              maxHeight: "100%",
+            }}
+          >
+            {/* Panel header */}
+            <div
+              style={{
+                padding: "12px 16px",
+                borderBottom: "1px solid var(--border)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <DecisionBadge decision={selected.decision} />
+                <p style={{ margin: 0, fontWeight: 600, fontSize: 13 }}>Audit Detail</p>
+              </div>
+              <button
+                className="btn btn-ghost"
+                onClick={() => setSelected(null)}
+                style={{ padding: "4px 6px" }}
+              >
+                <X size={14} />
+              </button>
             </div>
-            <pre className="text-xs bg-gray-900 text-green-300 rounded p-3 overflow-x-auto whitespace-pre-wrap break-all">
-              {JSON.stringify(selected, null, 2)}
-            </pre>
+
+            {/* Detail rows */}
+            <div
+              style={{
+                overflowY: "auto",
+                padding: "14px 16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
+              }}
+            >
+              {[
+                { label: "Request ID", value: selected.request_id },
+                { label: "Timestamp", value: new Date(selected.timestamp).toLocaleString() },
+                { label: "User", value: selected.principal.user_id },
+                { label: "Org", value: selected.principal.org_id },
+                { label: "Auth Source", value: selected.principal.auth_source },
+                { label: "Action", value: selected.action },
+                { label: "Resource", value: selected.resource },
+                { label: "Reason", value: selected.reason },
+                { label: "Latency", value: `${selected.latency_ms}ms` },
+              ].map(({ label, value }) => (
+                <div key={label}>
+                  <p className="section-label" style={{ marginBottom: 2 }}>{label}</p>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 12.5,
+                      color: "var(--text-primary)",
+                      wordBreak: "break-all",
+                      fontFamily: ["Request ID", "User", "Org", "Resource"].includes(label) ? "monospace" : undefined,
+                    }}
+                  >
+                    {value}
+                  </p>
+                </div>
+              ))}
+
+              {selected.matched_policy_ids.length > 0 && (
+                <div>
+                  <p className="section-label" style={{ marginBottom: 4 }}>Matched Policies</p>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {selected.matched_policy_ids.map((id) => (
+                      <code
+                        key={id}
+                        style={{
+                          fontSize: 11,
+                          color: "var(--text-secondary)",
+                          background: "var(--surface-muted)",
+                          border: "1px solid var(--border-soft)",
+                          borderRadius: 5,
+                          padding: "3px 8px",
+                          display: "block",
+                          wordBreak: "break-all",
+                        }}
+                      >
+                        {id}
+                      </code>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {Object.keys(selected.evaluated_context).length > 0 && (
+                <div>
+                  <p className="section-label" style={{ marginBottom: 4 }}>Evaluated Context</p>
+                  <pre
+                    style={{
+                      margin: 0,
+                      background: "#101010",
+                      color: "#6ee7b7",
+                      fontSize: 11,
+                      borderRadius: 7,
+                      padding: "10px 12px",
+                      overflow: "auto",
+                      fontFamily: "monospace",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {JSON.stringify(selected.evaluated_context, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

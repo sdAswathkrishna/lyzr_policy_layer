@@ -18,11 +18,12 @@ import {
   MarkerType,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
+import { X } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface AgentDetail {
-  id?: string;   // lives on Node.id; optional in data payload
+  id?: string;
   label: string;
   type: "trigger" | "agent" | "policy" | "lyzr-native" | "output" | "tool";
   description?: string;
@@ -35,104 +36,246 @@ export interface AgentDetail {
   tools?: string[];
   policies?: { scope: string; name: string; effect: string; raw_nl: string }[];
   meta?: Record<string, string>;
-  [key: string]: unknown; // required by ReactFlow Node.data typing
+  [key: string]: unknown;
 }
 
-// ── Custom Node: Trigger ───────────────────────────────────────────────────────
+// ── Node: Trigger / Output ────────────────────────────────────────────────────
 
 function TriggerNode({ data }: NodeProps) {
   const d = data as unknown as AgentDetail;
   return (
     <div
-      className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-stone-300 bg-stone-100 shadow-sm cursor-pointer select-none min-w-[160px]"
-      style={{ fontFamily: "inherit" }}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "8px 14px",
+        borderRadius: 10,
+        border: "1px solid #d4d0ca",
+        background: "#f7f6f3",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+        minWidth: 140,
+        fontFamily: "Roboto, sans-serif",
+        cursor: "default",
+        userSelect: "none",
+      }}
     >
-      <span className="text-stone-500 text-xs">▶</span>
-      <span className="text-sm font-medium text-stone-700">{d.label}</span>
-      <Handle type="source" position={Position.Right} className="!bg-stone-400 !w-2.5 !h-2.5" />
+      <span style={{ color: "#9c9791", fontSize: 10 }}>▶</span>
+      <span style={{ fontSize: 13, fontWeight: 500, color: "#1a1917" }}>{d.label}</span>
+      <Handle type="source" position={Position.Right} style={{ background: "#9c9791", width: 8, height: 8 }} />
     </div>
   );
 }
-
-// ── Custom Node: Output ────────────────────────────────────────────────────────
 
 function OutputNode({ data }: NodeProps) {
   const d = data as unknown as AgentDetail;
   return (
-    <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-stone-300 bg-stone-100 shadow-sm select-none min-w-[160px]">
-      <Handle type="target" position={Position.Left} className="!bg-stone-400 !w-2.5 !h-2.5" />
-      <span className="text-stone-500 text-xs">■</span>
-      <span className="text-sm font-medium text-stone-700">{d.label}</span>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "8px 14px",
+        borderRadius: 10,
+        border: "1px solid #d4d0ca",
+        background: "#f7f6f3",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+        minWidth: 140,
+        fontFamily: "Roboto, sans-serif",
+        userSelect: "none",
+      }}
+    >
+      <Handle type="target" position={Position.Left} style={{ background: "#9c9791", width: 8, height: 8 }} />
+      <span style={{ color: "#9c9791", fontSize: 10 }}>■</span>
+      <span style={{ fontSize: 13, fontWeight: 500, color: "#1a1917" }}>{d.label}</span>
     </div>
   );
 }
 
-// ── Custom Node: Lyzr Native ───────────────────────────────────────────────────
+// ── Node: Lyzr Native ────────────────────────────────────────────────────────
 
 function LyzrNativeNode({ data }: NodeProps) {
   const d = data as unknown as AgentDetail;
   return (
-    <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-amber-300 bg-amber-50 shadow-sm select-none min-w-[160px]">
-      <Handle type="target" position={Position.Left} className="!bg-amber-400 !w-2.5 !h-2.5" />
-      <span className="text-amber-600 text-xs">◆</span>
-      <span className="text-sm font-medium text-amber-800">{d.label}</span>
-      <span className="ml-auto text-[10px] text-amber-500 bg-amber-100 px-1.5 rounded">Lyzr</span>
-      <Handle type="source" position={Position.Right} className="!bg-amber-400 !w-2.5 !h-2.5" />
+    <div
+      style={{
+        padding: "8px 14px",
+        borderRadius: 10,
+        border: "1px solid #e8c878",
+        background: "#fffbeb",
+        boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+        minWidth: 160,
+        fontFamily: "Roboto, sans-serif",
+        userSelect: "none",
+      }}
+    >
+      <Handle type="target" position={Position.Left} style={{ background: "#d4aa3f", width: 8, height: 8 }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ color: "#92600a", fontSize: 10 }}>◆</span>
+        <span style={{ fontSize: 13, fontWeight: 500, color: "#1a1917" }}>{d.label}</span>
+        <span
+          style={{
+            marginLeft: "auto",
+            fontSize: 9,
+            fontWeight: 600,
+            color: "#92600a",
+            background: "#fef3c7",
+            border: "1px solid #e8c878",
+            borderRadius: 3,
+            padding: "1px 5px",
+            letterSpacing: "0.04em",
+          }}
+        >
+          LYZR
+        </span>
+      </div>
+      {d.description && (
+        <p style={{ margin: "3px 0 0 16px", fontSize: 10.5, color: "#92600a", opacity: 0.8 }}>
+          {d.description}
+        </p>
+      )}
+      <Handle type="source" position={Position.Right} style={{ background: "#d4aa3f", width: 8, height: 8 }} />
     </div>
   );
 }
 
-// ── Custom Node: Policy Layer ─────────────────────────────────────────────────
+// ── Node: Policy Layer ───────────────────────────────────────────────────────
 
 function PolicyNode({ data, selected }: NodeProps) {
   const d = data as unknown as AgentDetail;
   return (
     <div
-      className={`px-4 py-2.5 rounded-xl border-2 border-indigo-400 bg-indigo-50 text-indigo-800 shadow-sm cursor-pointer select-none min-w-[200px] transition-all ${selected ? "ring-2 ring-offset-1 ring-indigo-400" : ""}`}
+      style={{
+        padding: "10px 14px",
+        borderRadius: 10,
+        border: `2px solid ${selected ? "#2383e2" : "#93c5fd"}`,
+        background: "#eff6ff",
+        boxShadow: selected
+          ? "0 0 0 3px rgba(35,131,226,0.15), 0 2px 6px rgba(0,0,0,0.08)"
+          : "0 1px 3px rgba(0,0,0,0.06)",
+        minWidth: 210,
+        fontFamily: "Roboto, sans-serif",
+        cursor: "pointer",
+        userSelect: "none",
+        transition: "border-color 0.15s, box-shadow 0.15s",
+      }}
     >
-      <Handle type="target" position={Position.Left} className="!bg-current !w-2.5 !h-2.5" />
-      <p className="text-sm font-semibold">{d.label}</p>
-      {d.description && <p className="text-[11px] opacity-70 mt-0.5">{d.description}</p>}
-      <span className="text-[10px] mt-1 inline-block bg-white/60 px-1.5 rounded font-medium">Lyzr API control-plane</span>
-      <Handle type="source" position={Position.Right} className="!bg-current !w-2.5 !h-2.5" />
+      <Handle type="target" position={Position.Left} style={{ background: "#2383e2", width: 8, height: 8 }} />
+      <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "#1e40af" }}>{d.label}</p>
+      {d.description && (
+        <p style={{ margin: "2px 0 0", fontSize: 10.5, color: "#3b82f6", opacity: 0.8 }}>
+          {d.description}
+        </p>
+      )}
+      <span
+        style={{
+          display: "inline-block",
+          marginTop: 6,
+          fontSize: 9,
+          fontWeight: 600,
+          color: "#1d4ed8",
+          background: "rgba(219,234,254,0.8)",
+          border: "1px solid #bfdbfe",
+          borderRadius: 4,
+          padding: "1px 6px",
+          letterSpacing: "0.04em",
+        }}
+      >
+        POLICY ENFORCEMENT
+      </span>
+      <Handle type="source" position={Position.Right} style={{ background: "#2383e2", width: 8, height: 8 }} />
     </div>
   );
 }
 
-// ── Custom Node: Agent ────────────────────────────────────────────────────────
+// ── Node: Agent ──────────────────────────────────────────────────────────────
 
 function AgentNode({ data, selected }: NodeProps) {
   const d = data as unknown as AgentDetail;
   return (
     <div
-      className={`px-4 py-3 rounded-xl border-2 border-stone-700 bg-white shadow-md cursor-pointer select-none min-w-[200px] transition-all ${selected ? "ring-2 ring-offset-2 ring-indigo-400" : ""}`}
+      style={{
+        padding: "10px 14px",
+        borderRadius: 10,
+        border: `2px solid ${selected ? "#1a1917" : "#5c5852"}`,
+        background: "#ffffff",
+        boxShadow: selected
+          ? "0 0 0 3px rgba(26,25,23,0.1), 0 2px 8px rgba(0,0,0,0.12)"
+          : "0 2px 6px rgba(0,0,0,0.1)",
+        minWidth: 200,
+        fontFamily: "Roboto, sans-serif",
+        cursor: "pointer",
+        userSelect: "none",
+        transition: "border-color 0.15s, box-shadow 0.15s",
+      }}
     >
-      <Handle type="target" position={Position.Left} className="!bg-stone-600 !w-2.5 !h-2.5" />
-      <div className="flex items-center gap-2">
-        <span className="flex items-center justify-center w-6 h-6 rounded bg-stone-900 text-white text-xs font-bold">L</span>
-        <span className="text-sm font-semibold text-stone-800">{d.label}</span>
+      <Handle type="target" position={Position.Left} style={{ background: "#5c5852", width: 8, height: 8 }} />
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: d.model ? 4 : 0 }}>
+        <span
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 6,
+            background: "#1a1917",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 11,
+            fontWeight: 700,
+            color: "#fff",
+            fontFamily: "Bentham, Georgia, serif",
+            flexShrink: 0,
+          }}
+        >
+          L
+        </span>
+        <span style={{ fontSize: 13, fontWeight: 600, color: "#1a1917" }}>{d.label}</span>
       </div>
-      {d.model && <p className="text-[11px] text-stone-400 mt-1">{d.model} · temp {d.temperature}</p>}
-      <Handle type="source" position={Position.Right} className="!bg-stone-600 !w-2.5 !h-2.5" />
-      <Handle type="source" position={Position.Bottom} id="tool-out" className="!bg-stone-400 !w-2 !h-2" />
+      {d.model && (
+        <p style={{ margin: 0, fontSize: 10.5, color: "#9c9791" }}>
+          {d.model} · temp {d.temperature}
+        </p>
+      )}
+      <Handle type="source" position={Position.Right} style={{ background: "#5c5852", width: 8, height: 8 }} />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="tool-out"
+        style={{ background: "#9c9791", width: 7, height: 7 }}
+      />
     </div>
   );
 }
 
-// ── Custom Node: Tool chip ────────────────────────────────────────────────────
+// ── Node: Tool chip ──────────────────────────────────────────────────────────
 
 function ToolNode({ data }: NodeProps) {
   const d = data as unknown as AgentDetail;
   return (
-    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-stone-300 bg-white shadow-sm text-xs text-stone-600 select-none">
-      <Handle type="target" position={Position.Top} className="!bg-stone-300 !w-2 !h-2" />
+    <div
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 5,
+        padding: "4px 10px",
+        borderRadius: 99,
+        border: "1px solid #e8e3dc",
+        background: "#ffffff",
+        boxShadow: "0 1px 2px rgba(0,0,0,0.05)",
+        fontSize: 11.5,
+        color: "#5c5852",
+        userSelect: "none",
+        fontFamily: "Roboto, sans-serif",
+      }}
+    >
+      <Handle type="target" position={Position.Top} style={{ background: "#d4d0ca", width: 6, height: 6 }} />
       <span>🔧</span>
       <span>{d.label}</span>
     </div>
   );
 }
 
-// ── Node type registry ────────────────────────────────────────────────────────
+// ── Registry ─────────────────────────────────────────────────────────────────
 
 const nodeTypes = {
   trigger: TriggerNode,
@@ -143,55 +286,45 @@ const nodeTypes = {
   tool: ToolNode,
 };
 
-// ── Initial graph ─────────────────────────────────────────────────────────────
+// ── Graph data ────────────────────────────────────────────────────────────────
 
-const EDGE_LINE_STYLE = {
-  stroke: "#a8a29e",
-  strokeWidth: 1.5,
-};
-
-const EDGE_MARKER = { type: MarkerType.ArrowClosed, color: "#a8a29e", width: 14, height: 14 };
+const EDGE_STYLE = { stroke: "#c7c3bd", strokeWidth: 1.5 };
+const EDGE_MARKER = { type: MarkerType.ArrowClosed, color: "#c7c3bd", width: 13, height: 13 };
 
 const initialNodes: Node[] = [
-  // Trigger
   {
     id: "trigger",
     type: "trigger",
     position: { x: 0, y: 200 },
     data: { label: "User Prompt", type: "trigger" } as AgentDetail,
   },
-  // Lyzr native: Safe AI Input
   {
     id: "safe-ai-input",
     type: "lyzr-native",
-    position: { x: 220, y: 180 },
+    position: { x: 220, y: 178 },
     data: {
       label: "Safe AI (Input)",
       description: "PII · Toxicity · Prompt injection",
       type: "lyzr-native",
-      meta: { scope: "" },
     } as AgentDetail,
   },
-  // Policy Enforcement Layer (unified)
   {
     id: "policy",
     type: "policy",
-    position: { x: 500, y: 180 },
+    position: { x: 500, y: 172 },
     data: {
-      label: "Policy Enforcement Layer",
-      description: "Unified governance checkpoint",
+      label: "User/Org Policy Gateway",
+      description: "Permit/forbid before governed actions",
       type: "policy",
-      meta: { scope: "all" },
-      role: "Controls data access, tool authorization, and output sanitization.",
+      role: "Controls who can access which governed tools or retrieval contexts.",
       instructions:
-        "Data access: Checks classification, owner, tenant, allowed_roles.\nTool authorization: Structured LLM planning + policy enforcement.\nOutput sanitization: Automatic PII/sensitive data masking.\n\nDeny behaviors: deny, redact, filter, escalate, strip, mask, block.",
+        "Principal: user_id + org_id.\nGoverned retrieval: blocks confidential context before prompt assembly.\nGoverned tool calls: checks input parameters before execution.\nInput content: blocks messages matching keyword policies.\nSemantics: default allow, forbid wins.",
     } as AgentDetail,
   },
-  // Lyzr Agent
   {
     id: "lyzr-agent",
     type: "agent",
-    position: { x: 780, y: 180 },
+    position: { x: 780, y: 175 },
     data: {
       label: "Lyzr Agent",
       description: "LLM / RAG / Tools",
@@ -201,19 +334,16 @@ const initialNodes: Node[] = [
       top_p: 1.0,
     } as AgentDetail,
   },
-  // Lyzr native: Output processing
   {
     id: "output-processing",
     type: "lyzr-native",
-    position: { x: 1060, y: 180 },
+    position: { x: 1060, y: 178 },
     data: {
       label: "Output Processing",
       description: "Memory · Humanizer · Sentiment",
       type: "lyzr-native",
-      meta: { scope: "" },
     } as AgentDetail,
   },
-  // Output
   {
     id: "output",
     type: "output",
@@ -223,125 +353,250 @@ const initialNodes: Node[] = [
 ];
 
 const initialEdges: Edge[] = [
-  { id: "e-trigger-safeai", source: "trigger", target: "safe-ai-input", style: EDGE_LINE_STYLE, markerEnd: EDGE_MARKER },
-  { id: "e-safeai-policy", source: "safe-ai-input", target: "policy", style: EDGE_LINE_STYLE, markerEnd: EDGE_MARKER },
-  { id: "e-policy-agent", source: "policy", target: "lyzr-agent", style: EDGE_LINE_STYLE, markerEnd: EDGE_MARKER },
-  { id: "e-agent-output-proc", source: "lyzr-agent", target: "output-processing", style: EDGE_LINE_STYLE, markerEnd: EDGE_MARKER },
-  { id: "e-output-proc-output", source: "output-processing", target: "output", style: EDGE_LINE_STYLE, markerEnd: EDGE_MARKER },
+  { id: "e1", source: "trigger", target: "safe-ai-input", style: EDGE_STYLE, markerEnd: EDGE_MARKER },
+  { id: "e2", source: "safe-ai-input", target: "policy", style: EDGE_STYLE, markerEnd: EDGE_MARKER },
+  { id: "e3", source: "policy", target: "lyzr-agent", style: EDGE_STYLE, markerEnd: EDGE_MARKER },
+  { id: "e4", source: "lyzr-agent", target: "output-processing", style: EDGE_STYLE, markerEnd: EDGE_MARKER },
+  { id: "e5", source: "output-processing", target: "output", style: EDGE_STYLE, markerEnd: EDGE_MARKER },
 ];
 
 // ── Side overlay ──────────────────────────────────────────────────────────────
 
 function SideOverlay({ node, onClose }: { node: Node; onClose: () => void }) {
   const d = node.data as AgentDetail;
+  const typeLabel =
+    d.type === "agent" ? "Lyzr Agent"
+    : d.type === "policy" ? "Policy Enforcement Layer"
+    : d.type === "lyzr-native" ? "Lyzr Native"
+    : String(d.type);
 
   return (
-    <div className="fixed top-0 right-0 h-full w-[420px] bg-white border-l border-stone-200 shadow-2xl z-50 flex flex-col overflow-hidden">
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        right: 0,
+        height: "100%",
+        width: 400,
+        background: "var(--surface)",
+        borderLeft: "1px solid var(--border)",
+        boxShadow: "var(--shadow-md)",
+        zIndex: 50,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        fontFamily: "Roboto, sans-serif",
+      }}
+    >
       {/* Header */}
-      <div className="flex items-start justify-between px-6 py-4 border-b border-stone-100">
+      <div
+        style={{
+          padding: "16px 20px",
+          borderBottom: "1px solid var(--border)",
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+        }}
+      >
         <div>
-          <p className="text-xs text-stone-400 mb-0.5">
-            {d.type === "agent" ? "Lyzr Agent" : d.type === "policy" ? "Policy Enforcement Layer" : d.type === "lyzr-native" ? "Lyzr Native" : d.type}
+          <p style={{ margin: 0, fontSize: 10.5, color: "var(--text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>
+            {typeLabel}
           </p>
-          <h2 className="text-base font-semibold text-stone-800">{d.label}</h2>
+          <h2
+            style={{
+              margin: "3px 0 0",
+              fontSize: 16,
+              fontFamily: "Bentham, Georgia, serif",
+              fontWeight: 400,
+              color: "var(--text-primary)",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            {d.label}
+          </h2>
         </div>
-        <button onClick={onClose} className="text-stone-400 hover:text-stone-700 text-lg leading-none mt-0.5">✕</button>
+        <button
+          style={{
+            background: "transparent",
+            border: 0,
+            cursor: "pointer",
+            color: "var(--text-muted)",
+            padding: 4,
+            borderRadius: 5,
+            display: "grid",
+            placeItems: "center",
+          }}
+          onClick={onClose}
+        >
+          <X size={16} />
+        </button>
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 text-sm">
+      <div style={{ flex: 1, overflowY: "auto", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 18 }}>
         {d.description && (
-          <Section label="Description">
-            <p className="text-stone-600">{d.description}</p>
-          </Section>
+          <OverlaySection label="Description">
+            <p style={{ margin: 0, color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.6 }}>{d.description}</p>
+          </OverlaySection>
         )}
 
         {d.role && (
-          <Section label="Agent Role">
-            <p className="text-stone-600 font-mono text-xs leading-relaxed bg-stone-50 rounded p-3 border">{d.role}</p>
-          </Section>
+          <OverlaySection label="Agent Role">
+            <CodeBlock>{d.role}</CodeBlock>
+          </OverlaySection>
         )}
 
         {d.goal && (
-          <Section label="Agent Goal">
-            <p className="text-stone-600">{d.goal}</p>
-          </Section>
+          <OverlaySection label="Agent Goal">
+            <p style={{ margin: 0, color: "var(--text-secondary)", fontSize: 13, lineHeight: 1.6 }}>{d.goal}</p>
+          </OverlaySection>
         )}
 
         {d.instructions && (
-          <Section label={d.type === "agent" ? "Agent Instructions" : "How it works"}>
-            <p className="text-stone-600 font-mono text-xs leading-relaxed whitespace-pre-wrap bg-stone-50 rounded p-3 border">
-              {d.instructions}
-            </p>
-          </Section>
+          <OverlaySection label={d.type === "agent" ? "Instructions" : "How it works"}>
+            <CodeBlock>{d.instructions}</CodeBlock>
+          </OverlaySection>
         )}
 
         {(d.model || d.temperature !== undefined) && (
-          <Section label="Model Parameters">
-            <div className="grid grid-cols-2 gap-2">
+          <OverlaySection label="Model Parameters">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {d.model && <Param label="Model" value={d.model} />}
               {d.temperature !== undefined && <Param label="Temperature" value={String(d.temperature)} />}
               {d.top_p !== undefined && <Param label="top_p" value={String(d.top_p)} />}
             </div>
-          </Section>
+          </OverlaySection>
         )}
 
         {d.tools && d.tools.length > 0 && (
-          <Section label="Configured Tools">
-            <div className="flex flex-wrap gap-2">
+          <OverlaySection label="Tools">
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
               {d.tools.map((t) => (
-                <span key={t} className="px-2 py-0.5 rounded-full bg-stone-100 text-stone-600 text-xs border">🔧 {t}</span>
+                <span
+                  key={t}
+                  style={{
+                    fontSize: 11.5,
+                    background: "var(--surface-muted)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 5,
+                    padding: "3px 9px",
+                    color: "var(--text-secondary)",
+                  }}
+                >
+                  🔧 {t}
+                </span>
               ))}
             </div>
-          </Section>
+          </OverlaySection>
         )}
 
         {d.policies && d.policies.length > 0 && (
-          <Section label="Active Policies">
-            <div className="space-y-2">
+          <OverlaySection label={`Active Policies (${d.policies.length})`}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
               {d.policies.map((p, i) => (
-                <div key={i} className={`rounded-lg border px-3 py-2 text-xs ${p.effect === "deny" ? "border-red-200 bg-red-50" : "border-green-200 bg-green-50"}`}>
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className={`font-bold ${p.effect === "deny" ? "text-red-600" : "text-green-600"}`}>{p.effect.toUpperCase()}</span>
-                    <span className="text-stone-500">{p.name}</span>
+                <div
+                  key={i}
+                  style={{
+                    borderRadius: 7,
+                    border: `1px solid ${p.effect === "forbid" ? "var(--red-border)" : "var(--green-border)"}`,
+                    background: p.effect === "forbid" ? "var(--red-bg)" : "var(--green-bg)",
+                    padding: "8px 11px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 2 }}>
+                    <span
+                      style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        color: p.effect === "forbid" ? "var(--red)" : "var(--green)",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.06em",
+                      }}
+                    >
+                      {p.effect}
+                    </span>
+                    <span style={{ fontSize: 11.5, color: "var(--text-secondary)" }}>{p.name}</span>
                   </div>
-                  <p className="text-stone-500 italic">&quot;{p.raw_nl}&quot;</p>
+                  <p style={{ margin: 0, fontSize: 11, color: "var(--text-muted)", fontStyle: "italic" }}>
+                    &ldquo;{p.raw_nl}&rdquo;
+                  </p>
                 </div>
               ))}
             </div>
-          </Section>
+          </OverlaySection>
         )}
 
         {d.meta && Object.keys(d.meta).filter((k) => k !== "scope").length > 0 && (
-          <Section label="Metadata">
-            <div className="grid grid-cols-2 gap-2">
+          <OverlaySection label="Metadata">
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {Object.entries(d.meta)
                 .filter(([k]) => k !== "scope")
-                .map(([k, v]) => (
-                  <Param key={k} label={k} value={v} />
-                ))}
+                .map(([k, v]) => <Param key={k} label={k} value={v} />)}
             </div>
-          </Section>
+          </OverlaySection>
         )}
       </div>
     </div>
   );
 }
 
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function OverlaySection({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <p className="text-[11px] font-semibold text-stone-400 uppercase tracking-wide mb-2">{label}</p>
+      <p
+        style={{
+          margin: "0 0 8px",
+          fontSize: 10.5,
+          fontWeight: 600,
+          color: "var(--text-muted)",
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+        }}
+      >
+        {label}
+      </p>
       {children}
     </div>
   );
 }
 
+function CodeBlock({ children }: { children: React.ReactNode }) {
+  return (
+    <pre
+      style={{
+        margin: 0,
+        background: "var(--surface-muted)",
+        border: "1px solid var(--border-soft)",
+        borderRadius: 7,
+        padding: "10px 12px",
+        fontFamily: "monospace",
+        fontSize: 11.5,
+        color: "var(--text-secondary)",
+        lineHeight: 1.65,
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-word",
+        overflowX: "auto",
+      }}
+    >
+      {children}
+    </pre>
+  );
+}
+
 function Param({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-stone-50 border rounded px-2.5 py-2">
-      <p className="text-[10px] text-stone-400 mb-0.5">{label}</p>
-      <p className="text-stone-700 font-mono text-xs">{value}</p>
+    <div
+      style={{
+        background: "var(--surface-muted)",
+        border: "1px solid var(--border-soft)",
+        borderRadius: 6,
+        padding: "7px 10px",
+      }}
+    >
+      <p style={{ margin: "0 0 2px", fontSize: 10, color: "var(--text-muted)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.06em" }}>
+        {label}
+      </p>
+      <p style={{ margin: 0, fontSize: 12, color: "var(--text-primary)", fontFamily: "monospace" }}>{value}</p>
     </div>
   );
 }
@@ -350,18 +605,53 @@ function Param({ label, value }: { label: string; value: string }) {
 
 function Legend() {
   const items = [
-    { color: "bg-stone-100 border-stone-300", label: "Trigger / Output" },
-    { color: "bg-amber-50 border-amber-300", label: "Lyzr Native" },
-    { color: "bg-indigo-50 border-indigo-400", label: "Policy Enforcement Layer" },
-    { color: "bg-white border-stone-700", label: "Lyzr Agent" },
+    { bg: "#f7f6f3", border: "#d4d0ca", label: "Trigger / Output" },
+    { bg: "#fffbeb", border: "#e8c878", label: "Lyzr Native" },
+    { bg: "#eff6ff", border: "#93c5fd", label: "Policy Enforcement" },
+    { bg: "#ffffff", border: "#5c5852", label: "Lyzr Agent" },
   ];
   return (
-    <div className="absolute bottom-4 left-4 z-10 bg-white border border-stone-200 rounded-xl shadow px-4 py-3 flex flex-col gap-1.5">
-      <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wide mb-1">Legend</p>
+    <div
+      style={{
+        position: "absolute",
+        bottom: 16,
+        left: 16,
+        zIndex: 10,
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: 9,
+        boxShadow: "var(--shadow-sm)",
+        padding: "10px 14px",
+        display: "flex",
+        flexDirection: "column",
+        gap: 6,
+      }}
+    >
+      <p
+        style={{
+          margin: "0 0 4px",
+          fontSize: 9.5,
+          fontWeight: 600,
+          color: "var(--text-muted)",
+          textTransform: "uppercase",
+          letterSpacing: "0.09em",
+        }}
+      >
+        Legend
+      </p>
       {items.map((item) => (
-        <div key={item.label} className="flex items-center gap-2">
-          <span className={`w-4 h-4 rounded border-2 shrink-0 ${item.color}`} />
-          <span className="text-xs text-stone-600">{item.label}</span>
+        <div key={item.label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span
+            style={{
+              width: 14,
+              height: 14,
+              borderRadius: 4,
+              background: item.bg,
+              border: `1.5px solid ${item.border}`,
+              flexShrink: 0,
+            }}
+          />
+          <span style={{ fontSize: 11.5, color: "var(--text-secondary)" }}>{item.label}</span>
         </div>
       ))}
     </div>
@@ -380,11 +670,9 @@ export default function FlowChart({
   policies?: AgentDetail["policies"];
 }) {
   const enrichedNodes = initialNodes.map((n) => {
-    // Enrich the Lyzr agent node with live data if provided
     if (n.id === "lyzr-agent" && agentDetails) {
       return { ...n, data: { ...n.data, ...agentDetails, label: agentDetails.label ?? "Lyzr Agent" } };
     }
-    // Enrich policy node with all active policies
     if (n.type === "policy" && policies) {
       return { ...n, data: { ...n.data, policies } };
     }
@@ -402,14 +690,14 @@ export default function FlowChart({
 
   const onNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
     const d = node.data as AgentDetail;
-    if (d.type === "tool") return; // no overlay for tool chips
+    if (d.type === "tool") return;
     setSelectedNode((prev) => (prev?.id === node.id ? null : node));
   }, []);
 
   const onPaneClick = useCallback(() => setSelectedNode(null), []);
 
   return (
-    <div className="relative w-full h-full">
+    <div style={{ position: "relative", width: "100%", height: "100%" }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -420,14 +708,28 @@ export default function FlowChart({
         onPaneClick={onPaneClick}
         nodeTypes={nodeTypes}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
-        minZoom={0.4}
-        maxZoom={1.5}
+        fitViewOptions={{ padding: 0.25 }}
+        minZoom={0.3}
+        maxZoom={1.6}
         proOptions={{ hideAttribution: true }}
       >
-        <Background color="#e7e5e4" gap={20} size={1} />
-        <Controls className="!shadow-md !border !border-stone-200 !rounded-xl" />
-        <MiniMap nodeStrokeWidth={2} className="!border !border-stone-200 !rounded-xl !shadow" />
+        <Background color="var(--border)" gap={22} size={1} />
+        <Controls
+          style={{
+            boxShadow: "var(--shadow-sm)",
+            border: "1px solid var(--border)",
+            borderRadius: 9,
+            overflow: "hidden",
+          }}
+        />
+        <MiniMap
+          nodeStrokeWidth={2}
+          style={{
+            border: "1px solid var(--border)",
+            borderRadius: 9,
+            boxShadow: "var(--shadow-sm)",
+          }}
+        />
       </ReactFlow>
 
       <Legend />

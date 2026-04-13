@@ -1,45 +1,183 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+"use client";
+
 import "./globals.css";
 import Link from "next/link";
-
-const inter = Inter({ subsets: ["latin"] });
-
-export const metadata: Metadata = {
-  title: "Lyzr Policy Layer",
-  description: "IAM-style policy enforcement for Lyzr agents",
-};
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import {
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  GitBranch,
+  LayoutGrid,
+  MessageSquare,
+  Moon,
+  ScrollText,
+  Sun,
+  Shield,
+} from "lucide-react";
 
 const navItems = [
-  { href: "/", label: "Dashboard" },
-  { href: "/flow", label: "Agent Flow" },
-  { href: "/policies", label: "Policies" },
-  { href: "/chat", label: "Chat" },
-  { href: "/audit", label: "Audit Log" },
+  { href: "/", label: "Dashboard", icon: LayoutGrid },
+  { href: "/flow", label: "Flow", icon: GitBranch },
+  { href: "/policies", label: "Policies", icon: FileText },
+  { href: "/chat", label: "Chat", icon: MessageSquare },
+  { href: "/audit", label: "Audit Log", icon: ScrollText },
 ];
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+type ThemeMode = "light" | "dark";
+
+function Sidebar({
+  collapsed,
+  onToggle,
+  theme,
+  onThemeToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+  theme: ThemeMode;
+  onThemeToggle: () => void;
+}) {
+  const pathname = usePathname();
+
   return (
-    <html lang="en" className={inter.className}>
-      <body className="bg-gray-50 text-gray-900 min-h-screen">
-        <nav className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-8 shadow-sm">
-          <span className="font-bold text-lg text-indigo-700">Lyzr Policy Layer</span>
-          <span className="text-xs text-gray-400 border border-gray-200 rounded px-2 py-0.5">
-            Integrated with Lyzr APIs
-          </span>
-          <div className="flex gap-6 ml-4">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="text-sm text-gray-600 hover:text-indigo-700 font-medium transition-colors"
-              >
-                {item.label}
-              </Link>
-            ))}
+    <aside className={`app-sidebar ${collapsed ? "collapsed" : ""}`}>
+      {/* Top — workspace + collapse toggle */}
+      <div className="sidebar-top">
+        <div className="workspace-chip">
+          <div className="workspace-avatar">
+            <Shield size={13} strokeWidth={2} />
           </div>
-        </nav>
-        <main className="px-8 py-6 max-w-7xl mx-auto">{children}</main>
+          {!collapsed && (
+            <div className="workspace-copy">
+              <p className="workspace-title">Lyzr Policy</p>
+              <p className="workspace-subtitle">Governance Gateway</p>
+            </div>
+          )}
+        </div>
+        <button
+          className="icon-button"
+          onClick={onToggle}
+          title={collapsed ? "Expand" : "Collapse"}
+          style={{ flexShrink: 0 }}
+        >
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
+      </div>
+
+      {/* Navigation */}
+      <nav className="sidebar-nav">
+        {!collapsed && (
+          <p
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              color: "var(--text-muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.09em",
+              padding: "10px 10px 4px",
+              margin: 0,
+            }}
+          >
+            Navigation
+          </p>
+        )}
+        {navItems.map((item) => {
+          const active = pathname === item.href;
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`nav-item ${active ? "active" : ""}`}
+              title={collapsed ? item.label : undefined}
+            >
+              <Icon
+                size={16}
+                strokeWidth={active ? 2.2 : 1.8}
+                style={{ flexShrink: 0, color: active ? "var(--text-primary)" : "var(--text-muted)" }}
+              />
+              {!collapsed && (
+                <span style={{ color: active ? "var(--text-primary)" : "var(--text-secondary)" }}>
+                  {item.label}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Footer — theme toggle */}
+      <div className="sidebar-footer">
+        <button
+          className="theme-switch"
+          onClick={onThemeToggle}
+          title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+        >
+          {theme === "light" ? (
+            <Moon size={14} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+          ) : (
+            <Sun size={14} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+          )}
+          {!collapsed && (
+            <span>{theme === "light" ? "Dark mode" : "Light mode"}</span>
+          )}
+        </button>
+      </div>
+    </aside>
+  );
+}
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const [collapsed, setCollapsed] = useState(false);
+  const [theme, setTheme] = useState<ThemeMode>("light");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem("lyzr-theme");
+    const storedSidebar = window.localStorage.getItem("lyzr-sidebar-collapsed");
+    const nextTheme: ThemeMode = storedTheme === "dark" ? "dark" : "light";
+    setTheme(nextTheme);
+    setCollapsed(storedSidebar === "true");
+    document.documentElement.dataset.theme = nextTheme;
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("lyzr-theme", theme);
+  }, [theme, mounted]);
+
+  useEffect(() => {
+    window.localStorage.setItem("lyzr-sidebar-collapsed", String(collapsed));
+  }, [collapsed]);
+
+  const isFlowPage = pathname === "/flow";
+
+  return (
+    <html lang="en" data-theme={theme}>
+      <head>
+        <title>Lyzr Policy Gateway</title>
+        <meta name="description" content="Governed access control for Lyzr agents" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Bentham&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap"
+          rel="stylesheet"
+        />
+      </head>
+      <body className="app-shell" style={{ opacity: mounted ? 1 : 0, transition: "opacity 0.1s" }}>
+        <Sidebar
+          collapsed={collapsed}
+          onToggle={() => setCollapsed((v) => !v)}
+          theme={theme}
+          onThemeToggle={() => setTheme((v) => (v === "light" ? "dark" : "light"))}
+        />
+        <main className={`app-main ${isFlowPage ? "flow-main" : ""}`}>
+          {children}
+        </main>
       </body>
     </html>
   );

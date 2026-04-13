@@ -12,8 +12,6 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
-// ── Agents ────────────────────────────────────────────────────────────────────
-
 export interface CreateAgentPayload {
   name: string;
   description?: string;
@@ -23,7 +21,7 @@ export interface CreateAgentPayload {
   provider_id?: string;
   model?: string;
   temperature?: number;
-  top_p?: number;   // required by Lyzr v3 API, defaults to 1.0
+  top_p?: number;
 }
 
 export interface CreateAgentResponse {
@@ -34,23 +32,39 @@ export interface CreateAgentResponse {
 export const createAgent = (payload: CreateAgentPayload) =>
   req<CreateAgentResponse>("/api/agents/", { method: "POST", body: JSON.stringify(payload) });
 
+export interface GovernedToolCall {
+  tool_name: string;
+  input: Record<string, unknown>;
+}
+
+export interface RetrievalContext {
+  context_id: string;
+  text: string;
+  classification: string;
+  context_tag: string;
+  org_id?: string;
+  metadata?: Record<string, unknown>;
+}
+
 export interface ChatPayload {
   session_id: string;
   message: string;
-  invoking_user_id: string;
-  tenant_id?: string;
-  data_classification?: string;
-  data_owner?: string;
-  allowed_roles?: string[];
-  recipient?: { recipient_type: string; recipient_id: string; trust_domain: string };
+  user_id: string;
+  org_id?: string;
+  rgid?: string;
   context_fields?: Record<string, unknown>;
+  governed_tool_call?: GovernedToolCall;
+  retrieval_request?: {
+    query: string;
+    contexts: RetrievalContext[];
+  };
 }
 
 export interface EvalResult {
   decision: "allow" | "deny";
-  matched_policy_id?: string;
-  matched_policy_name?: string;
-  deny_behavior?: string;
+  matched_policy_ids: string[];
+  matched_policy_names: string[];
+  audit_id?: string;
   reason: string;
   latency_ms: number;
 }
@@ -58,18 +72,17 @@ export interface EvalResult {
 export interface ChatResponse {
   response: string;
   request_id: string;
+  effective_prompt?: string;
   policy_trace: EvalResult[];
-  llm_eval_used: boolean;
 }
 
 export interface PolicyDeniedResponse {
   denied: true;
-  layer: string;
   decision: "deny";
+  action: string;
+  resource: string;
   reason: string;
-  policy_id?: string;
-  policy_name?: string;
-  deny_behavior?: string;
+  matched_policy_ids: string[];
   request_id: string;
   audit_id: string;
 }
@@ -80,36 +93,37 @@ export const chat = (agentId: string, payload: ChatPayload) =>
     body: JSON.stringify({ agent_id: agentId, ...payload }),
   });
 
-// ── Policies ──────────────────────────────────────────────────────────────────
+export interface PolicyCondition {
+  field: string;
+  operator: string;
+  value: unknown;
+}
 
 export interface Policy {
   id: string;
   name: string;
   raw_nl: string;
-  scope: string;
-  subject: string;
-  action: string;
+  principal: { user_id?: string; org_id?: string };
+  action: "tool_call" | "retrieve_context" | "input_content";
   resource: string;
-  condition: { type: string; match_fields: Record<string, unknown>; llm_prompt?: string };
-  effect: "allow" | "deny";
-  deny_behavior: string;
+  conditions: PolicyCondition[];
+  effect: "permit" | "forbid";
   compiled_at: string;
   enabled: boolean;
 }
 
-export const listPolicies = (scope?: string) =>
-  req<Policy[]>(`/api/policies/${scope ? `?scope=${scope}` : ""}`);
+export const listPolicies = () => req<Policy[]>("/api/policies/");
 
-export const previewPolicy = (raw_nl: string, scope?: string) =>
+export const previewPolicy = (raw_nl: string) =>
   req<{ preview: Policy; raw_nl: string }>("/api/policies/preview", {
     method: "POST",
-    body: JSON.stringify({ raw_nl, scope }),
+    body: JSON.stringify({ raw_nl }),
   });
 
-export const createPolicy = (raw_nl: string, scope?: string) =>
+export const createPolicy = (raw_nl: string) =>
   req<Policy>("/api/policies/", {
     method: "POST",
-    body: JSON.stringify({ raw_nl, scope }),
+    body: JSON.stringify({ raw_nl }),
   });
 
 export const deletePolicy = (id: string) =>
@@ -121,18 +135,15 @@ export const togglePolicy = (id: string, enabled: boolean) =>
     body: JSON.stringify({ enabled }),
   });
 
-// ── Audit ─────────────────────────────────────────────────────────────────────
-
 export interface AuditEntry {
   id: string;
   timestamp: string;
   request_id: string;
-  subject_identity: { invoking_user_id: string; active_agent_id: string; tenant_id: string };
-  destination_identity?: { recipient_type: string; recipient_id: string; trust_domain: string };
-  layer: string;
+  principal: { user_id: string; org_id: string; auth_source: string };
   action: string;
   resource: string;
-  matched_policy_id?: string;
+  evaluated_context: Record<string, unknown>;
+  matched_policy_ids: string[];
   decision: "allow" | "deny";
   reason: string;
   latency_ms: number;
@@ -142,15 +153,15 @@ export interface AuditStats {
   total: number;
   total_allow: number;
   total_deny: number;
-  by_layer: Record<string, number>;
+  by_action: Record<string, number>;
   by_decision: Record<string, number>;
 }
 
 export const listAudit = (params?: {
   limit?: number;
   offset?: number;
-  agent_id?: string;
-  layer?: string;
+  user_id?: string;
+  org_id?: string;
   decision?: string;
 }) => {
   const qs = new URLSearchParams(

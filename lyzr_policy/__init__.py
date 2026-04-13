@@ -1,70 +1,62 @@
 """
-Lyzr Policy Enforcement Layer
+Lyzr User/Org Policy Gateway.
 
-A POC control-plane library that adds IAM-style governance to Lyzr agents.
-
-The unified Policy Enforcement Layer internally manages three types of checks
-(integrated with Lyzr REST APIs — NOT native Lyzr hooks):
-  - DataAccessControl: data access control
-  - PolicyEnforcementLayer: tool authorization
-  - OutputSanitizer: automatic output sanitization
-
-Users interact with a single policy concept that governs all concerns.
-
-Quick start:
-    from lyzr_policy import LyzrClient, PolicyEnforcementLayer, PolicyCompiler
-    from lyzr_policy.store import init_db, save_policy
-
-    init_db()
-    compiler = PolicyCompiler()
-    policy = compiler.compile("agent support-bot cannot call github")
-    save_policy(policy)
+Who can access what, under which conditions?
 """
 
 from .compiler import PolicyCompiler
 from .evaluator import PolicyEvaluator
-from .gateway import DataAccessControl
-from .enforcement import PolicyEnforcementLayer
-from .trust import OutputSanitizer
-from .lyzr_client import LyzrClient, LyzrAPIError
+from .gateway import PolicyGateway, resolve_identity
+from .lyzr_client import LyzrAPIError, LyzrClient
 from .models import (
+    AuditEntry,
     ChatRequest,
     ChatResponse,
-    DataClassification,
+    ComparisonOperator,
+    Decision,
     EvalResult,
+    GovernedToolCall,
     IdentityContext,
     Policy,
+    PolicyAction,
+    PolicyCondition,
     PolicyCreate,
     PolicyDeniedResponse,
-    PolicyScope,
-    Recipient,
-    RecipientType,
+    PolicyEffect,
+    Principal,
+    RetrievalContext,
+    RetrievalRequest,
 )
-from .store import init_db, save_policy, get_policy, list_policies, delete_policy, list_audit
+from .store import delete_policy, get_policy, init_db, list_audit, list_policies, save_policy
 
 __all__ = [
-    "PolicyCompiler",
-    "PolicyEvaluator",
-    "DataAccessControl",
-    "PolicyEnforcementLayer",
-    "OutputSanitizer",
-    "LyzrClient",
-    "LyzrAPIError",
+    "AuditEntry",
     "ChatRequest",
     "ChatResponse",
-    "DataClassification",
+    "ComparisonOperator",
+    "Decision",
     "EvalResult",
+    "GovernedToolCall",
     "IdentityContext",
     "Policy",
+    "PolicyAction",
+    "PolicyCompiler",
+    "PolicyCondition",
     "PolicyCreate",
     "PolicyDeniedResponse",
-    "PolicyScope",
-    "Recipient",
-    "RecipientType",
-    "init_db",
-    "save_policy",
-    "get_policy",
-    "list_policies",
+    "PolicyEffect",
+    "PolicyEvaluator",
+    "PolicyGateway",
+    "Principal",
+    "RetrievalContext",
+    "RetrievalRequest",
+    "LyzrAPIError",
+    "LyzrClient",
+    "resolve_identity",
     "delete_policy",
+    "get_policy",
+    "init_db",
     "list_audit",
+    "list_policies",
+    "save_policy",
 ]

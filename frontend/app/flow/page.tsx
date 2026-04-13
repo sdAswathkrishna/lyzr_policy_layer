@@ -4,37 +4,30 @@ import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { listPolicies, Policy } from "@/lib/api";
 import type { AgentDetail } from "@/components/FlowChart";
+import { GitBranch, RefreshCw } from "lucide-react";
 
-// Dynamically import ReactFlow (no SSR — uses browser APIs)
 const FlowChart = dynamic(() => import("@/components/FlowChart"), { ssr: false });
 
 const AGENT_ID_KEY = "lyzr_policy_agent_id";
+const DEFAULT_AGENT_ID = process.env.NEXT_PUBLIC_DEFAULT_AGENT_ID ?? "";
 
 export default function FlowPage() {
-  const [agentId, setAgentId] = useState("");
+  const [agentId, setAgentId] = useState(DEFAULT_AGENT_ID);
   const [agentDetails, setAgentDetails] = useState<Partial<AgentDetail> | undefined>(undefined);
   const [policies, setPolicies] = useState<AgentDetail["policies"]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Auto-load agent ID from localStorage (set from Chat page)
   useEffect(() => {
     const stored = localStorage.getItem(AGENT_ID_KEY);
-    if (stored) setAgentId(stored);
+    if (stored && !DEFAULT_AGENT_ID) setAgentId(stored);
   }, []);
 
   useEffect(() => {
-    // Load active policies
     listPolicies()
-      .then((ps: Policy[]) => {
-        const mapped = ps.map((p) => ({
-          scope: p.scope,
-          name: p.name,
-          effect: p.effect,
-          raw_nl: p.raw_nl,
-        }));
-        setPolicies(mapped);
-      })
+      .then((ps: Policy[]) =>
+        setPolicies(ps.map((p) => ({ scope: p.action, name: p.name, effect: p.effect, raw_nl: p.raw_nl })))
+      )
       .catch(() => null);
   }, []);
 
@@ -57,11 +50,12 @@ export default function FlowPage() {
         model: data.model,
         temperature: data.temperature,
         top_p: data.top_p,
-        tools: Array.isArray(data.tools) && data.tools.length > 0
-          ? data.tools.map((t: { name?: string } | string) =>
-              typeof t === "string" ? t : t.name ?? JSON.stringify(t)
-            )
-          : undefined,
+        tools:
+          Array.isArray(data.tools) && data.tools.length > 0
+            ? data.tools.map((t: { name?: string } | string) =>
+                typeof t === "string" ? t : t.name ?? JSON.stringify(t)
+              )
+            : undefined,
         meta: {
           agent_id: data._id ?? agentId,
           version: data.version ?? "3",
@@ -78,52 +72,85 @@ export default function FlowPage() {
   };
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100vh - 56px)" }}>
+    <div className="flex flex-col" style={{ height: "calc(100vh - 0px)" }}>
       {/* Toolbar */}
-      <div className="flex items-center gap-3 px-5 py-2.5 bg-white border-b border-stone-200 shrink-0 flex-wrap">
-        <span className="text-sm font-semibold text-stone-700">Agent Flow</span>
-        <span className="text-xs text-stone-400 border border-stone-200 rounded px-2 py-0.5">
-          Integrated with Lyzr APIs
-        </span>
-        <div className="flex items-center gap-2 ml-auto">
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 12,
+          padding: "10px 20px",
+          background: "var(--surface)",
+          borderBottom: "1px solid var(--border)",
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+          <GitBranch size={14} style={{ color: "var(--text-muted)" }} />
+          <span
+            style={{
+              fontFamily: "Bentham, Georgia, serif",
+              fontSize: 14,
+              color: "var(--text-primary)",
+              letterSpacing: "-0.01em",
+            }}
+          >
+            Agent Flow
+          </span>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginLeft: "auto" }}>
           <input
-            className="border border-stone-200 rounded-lg px-3 py-1.5 text-sm font-mono w-64 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            style={{
+              border: "1px solid var(--border)",
+              borderRadius: 7,
+              padding: "6px 11px",
+              fontSize: 12.5,
+              fontFamily: "monospace",
+              width: 280,
+              outline: "none",
+              background: "var(--surface-muted)",
+              color: "var(--text-primary)",
+              transition: "border-color 0.15s",
+            }}
             placeholder="Enter Lyzr agent ID…"
             value={agentId}
             onChange={(e) => setAgentId(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && loadAgent()}
+            onFocus={(e) => (e.target.style.borderColor = "var(--accent)")}
+            onBlur={(e) => (e.target.style.borderColor = "var(--border)")}
           />
           <button
+            className="btn btn-primary"
             onClick={loadAgent}
             disabled={loading || !agentId.trim()}
-            className="px-4 py-1.5 text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+            style={{ fontSize: 12.5, gap: 5, padding: "6px 14px" }}
           >
-            {loading ? "Loading…" : "Load"}
+            {loading ? <RefreshCw size={12} className="spin" /> : null}
+            {loading ? "Loading…" : "Load Agent"}
           </button>
-          {agentDetails && (
-            <span className="text-xs text-green-600 font-medium">✓ {agentDetails.label}</span>
+          {agentDetails && !error && (
+            <span
+              style={{
+                fontSize: 12,
+                color: "var(--green)",
+                fontWeight: 500,
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
+              ✓ {agentDetails.label}
+            </span>
           )}
-          {error && <span className="text-xs text-red-500">{error}</span>}
-        </div>
-        <div className="flex items-center gap-3 text-xs text-stone-500">
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-1.5 inline-block bg-stone-400 rounded" />
-            Lyzr native
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="w-3 h-1.5 inline-block bg-indigo-400 rounded" />
-            Policy layer
-          </span>
+          {error && (
+            <span style={{ fontSize: 12, color: "var(--red)" }}>{error}</span>
+          )}
         </div>
       </div>
 
-      {/* Flow canvas */}
-      <div className="flex-1 overflow-hidden bg-stone-50">
-        <FlowChart
-          agentId={agentId}
-          agentDetails={agentDetails}
-          policies={policies}
-        />
+      {/* Canvas */}
+      <div className="flex-1 overflow-hidden" style={{ background: "var(--bg)" }}>
+        <FlowChart agentId={agentId} agentDetails={agentDetails} policies={policies} />
       </div>
     </div>
   );
