@@ -64,8 +64,8 @@ export default function ChatPage() {
     setCreating(true);
     try {
       const resp = await createAgent({
-        name: "Policy POC Demo Agent",
-        description: "Demo agent for the Lyzr Policy Enforcement Layer POC",
+        name: "Lyzr Policy Agent",
+        description: "Agent integrated with the Lyzr Policy Enforcement Layer.",
         agent_role: "You are a helpful assistant demonstrating policy enforcement.",
         agent_instructions: "Answer questions concisely and helpfully.",
         agent_goal: "Demonstrate the Lyzr Policy Enforcement Layer.",

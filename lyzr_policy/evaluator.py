@@ -37,7 +37,7 @@ from .models import (
     Recipient,
     SubjectIdentity,
 )
-from .store import match_policies, write_audit
+from .store import find_policies, write_audit
 
 load_dotenv()
 
@@ -70,14 +70,13 @@ class PolicyEvaluator:
         """
         t0 = time.monotonic()
 
-        policies = match_policies(
+        policies = find_policies(
             scope=scope,
             subject=identity.active_agent_id,
             action=action,
-            resource=resource,
         )
 
-        result = self._evaluate_policies(policies, identity, context_fields)
+        result = self._evaluate_policies(policies, resource, identity, context_fields)
 
         latency_ms = int((time.monotonic() - t0) * 1000)
         result.latency_ms = latency_ms
@@ -99,52 +98,83 @@ class PolicyEvaluator:
             reason=result.reason,
             latency_ms=latency_ms,
         )
-        write_audit(audit)
+        result.audit_id = write_audit(audit)
 
         return result
 
     def _evaluate_policies(
         self,
         policies: list[Policy],
+        resource: str,
         identity: IdentityContext,
         context_fields: dict[str, Any],
     ) -> EvalResult:
-        if not policies:
+        applicable = [p for p in policies if self._resource_matches(p.resource, resource)]
+
+        if not applicable and not policies:
             return EvalResult(
                 decision=Decision.ALLOW,
                 reason="No matching policy — default allow",
             )
 
-        # Separate deterministic from LLM-eval policies
-        deterministic = [p for p in policies if p.condition.type != ConditionType.LLM_EVAL]
-        llm_policies = [p for p in policies if p.condition.type == ConditionType.LLM_EVAL]
+        allow_policies = [p for p in policies if p.effect == PolicyEffect.ALLOW]
+        has_allow_list = len(allow_policies) > 0
 
-        # Evaluate deterministic first
-        for policy in deterministic:
-            result = self._eval_deterministic(policy, identity, context_fields)
-            if result.decision == Decision.DENY:
+        applicable_deny = [p for p in applicable if p.effect == PolicyEffect.DENY]
+        applicable_allow = [p for p in applicable if p.effect == PolicyEffect.ALLOW]
+
+        for policy in self._ordered_policies(applicable_deny):
+            result, matched = self._evaluate_single_policy(policy, identity, context_fields)
+            if matched and result.decision == Decision.DENY:
                 return result
 
-        # Only invoke LLM if no deterministic deny was found
-        for policy in llm_policies:
-            result = self._eval_llm(policy, identity, context_fields)
-            if result.decision == Decision.DENY:
-                return result
+        matched_allow: Optional[EvalResult] = None
+        for policy in self._ordered_policies(applicable_allow):
+            result, matched = self._evaluate_single_policy(policy, identity, context_fields)
+            if matched:
+                matched_allow = result
+                break
 
-        # All policies evaluated — no deny found
+        if has_allow_list:
+            if matched_allow:
+                return matched_allow
+            return EvalResult(
+                decision=Decision.DENY,
+                reason="No allow policy matched — request denied by allow-list enforcement",
+                deny_behavior=DenyBehavior.DENY,
+            )
+
         return EvalResult(
             decision=Decision.ALLOW,
-            matched_policy_id=policies[0].id if policies else None,
-            matched_policy_name=policies[0].name if policies else None,
-            reason="All matching policies passed",
+            reason="No matching deny policy — default allow",
         )
+
+    @staticmethod
+    def _resource_matches(policy_resource: str, resource: str) -> bool:
+        return policy_resource == "*" or policy_resource == resource
+
+    @staticmethod
+    def _ordered_policies(policies: list[Policy]) -> list[Policy]:
+        deterministic = [p for p in policies if p.condition.type != ConditionType.LLM_EVAL]
+        llm_policies = [p for p in policies if p.condition.type == ConditionType.LLM_EVAL]
+        return deterministic + llm_policies
+
+    def _evaluate_single_policy(
+        self,
+        policy: Policy,
+        identity: IdentityContext,
+        context_fields: dict[str, Any],
+    ) -> tuple[EvalResult, bool]:
+        if policy.condition.type == ConditionType.LLM_EVAL:
+            return self._eval_llm(policy, identity, context_fields)
+        return self._eval_deterministic(policy, identity, context_fields)
 
     @staticmethod
     def _eval_deterministic(
         policy: Policy,
         identity: IdentityContext,
         context_fields: dict[str, Any],
-    ) -> EvalResult:
+    ) -> tuple[EvalResult, bool]:
         condition = policy.condition
 
         if condition.type == ConditionType.ALWAYS:
@@ -168,11 +198,8 @@ class PolicyEvaluator:
         if not matched:
             return EvalResult(
                 decision=Decision.ALLOW,
-                matched_policy_id=policy.id,
-                matched_policy_name=policy.name,
-                deny_behavior=policy.deny_behavior,
                 reason=f"Policy '{policy.name}' condition not matched — pass-through",
-            )
+            ), False
 
         if policy.effect == PolicyEffect.DENY:
             return EvalResult(
@@ -181,21 +208,21 @@ class PolicyEvaluator:
                 matched_policy_name=policy.name,
                 deny_behavior=policy.deny_behavior,
                 reason=f"Policy '{policy.name}' denied: {policy.raw_nl}",
-            )
+            ), True
 
         return EvalResult(
             decision=Decision.ALLOW,
             matched_policy_id=policy.id,
             matched_policy_name=policy.name,
             reason=f"Policy '{policy.name}' explicitly allowed",
-        )
+        ), True
 
     def _eval_llm(
         self,
         policy: Policy,
         identity: IdentityContext,
         context_fields: dict[str, Any],
-    ) -> EvalResult:
+    ) -> tuple[EvalResult, bool]:
         """
         Use an LLM to evaluate a soft/ambiguous policy.
         Only called for condition.type == "llm_eval" policies.
@@ -220,10 +247,8 @@ class PolicyEvaluator:
             # LLM failure → fail-safe to ALLOW to avoid false denials
             return EvalResult(
                 decision=Decision.ALLOW,
-                matched_policy_id=policy.id,
-                matched_policy_name=policy.name,
                 reason=f"LLM eval failed ({e}), defaulting to allow",
-            )
+            ), False
 
         return EvalResult(
             decision=decision,
@@ -231,7 +256,7 @@ class PolicyEvaluator:
             matched_policy_name=policy.name,
             deny_behavior=policy.deny_behavior if decision == Decision.DENY else None,
             reason=f"LLM eval for policy '{policy.name}': {decision.value}",
-        )
+        ), True
 
     def _call_llm(self, user_message: str) -> str:
         if self.provider == "openai":

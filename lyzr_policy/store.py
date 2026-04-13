@@ -228,7 +228,7 @@ def _row_to_policy(row: dict) -> Policy:
 # ── Audit log ──────────────────────────────────────────────────────────────────
 
 
-def write_audit(entry: AuditEntry) -> None:
+def write_audit(entry: AuditEntry) -> str:
     dest = entry.destination_identity.model_dump() if entry.destination_identity else None
     with _connect() as conn:
         with conn.cursor() as cur:
@@ -259,6 +259,34 @@ def write_audit(entry: AuditEntry) -> None:
                 },
             )
         conn.commit()
+    return entry.id
+
+
+def find_policies(
+    scope: PolicyScope,
+    subject: str,
+    action: PolicyAction,
+) -> list[Policy]:
+    """
+    Return enabled policies that could apply to this (scope, subject, action).
+    Resource filtering happens in the evaluator so it can implement allow-list
+    semantics correctly.
+    """
+    with _connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT * FROM policies
+                WHERE enabled = TRUE
+                  AND scope = %s
+                  AND (subject = %s OR subject = '*')
+                  AND action = %s
+                ORDER BY compiled_at ASC
+                """,
+                (scope.value, subject, action.value),
+            )
+            rows = cur.fetchall()
+    return [_row_to_policy(r) for r in rows]
 
 
 def list_audit(

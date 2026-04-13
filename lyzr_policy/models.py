@@ -185,6 +185,7 @@ class EvalResult(BaseModel):
     matched_policy_id: Optional[str] = None
     matched_policy_name: Optional[str] = None
     deny_behavior: Optional[DenyBehavior] = None
+    audit_id: Optional[str] = None
     reason: str
     latency_ms: int = 0
 
@@ -194,7 +195,7 @@ class EvalResult(BaseModel):
 
 class ChatRequest(BaseModel):
     """Incoming chat request with full identity + metadata context."""
-    agent_id: str
+    agent_id: str = ""
     session_id: str
     message: str
     invoking_user_id: str

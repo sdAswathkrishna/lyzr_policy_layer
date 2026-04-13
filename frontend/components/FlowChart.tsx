@@ -82,7 +82,7 @@ function LyzrNativeNode({ data }: NodeProps) {
   );
 }
 
-// ── Custom Node: Policy Layer (POC) ───────────────────────────────────────────
+// ── Custom Node: Policy Layer ─────────────────────────────────────────────────
 
 function PolicyNode({ data, selected }: NodeProps) {
   const d = data as unknown as AgentDetail;
@@ -93,7 +93,7 @@ function PolicyNode({ data, selected }: NodeProps) {
       <Handle type="target" position={Position.Left} className="!bg-current !w-2.5 !h-2.5" />
       <p className="text-sm font-semibold">{d.label}</p>
       {d.description && <p className="text-[11px] opacity-70 mt-0.5">{d.description}</p>}
-      <span className="text-[10px] mt-1 inline-block bg-white/60 px-1.5 rounded font-medium">POC control-plane</span>
+      <span className="text-[10px] mt-1 inline-block bg-white/60 px-1.5 rounded font-medium">Lyzr API control-plane</span>
       <Handle type="source" position={Position.Right} className="!bg-current !w-2.5 !h-2.5" />
     </div>
   );
@@ -160,11 +160,23 @@ const initialNodes: Node[] = [
     position: { x: 0, y: 200 },
     data: { label: "User Prompt", type: "trigger" } as AgentDetail,
   },
+  // Lyzr native: Safe AI Input
+  {
+    id: "safe-ai-input",
+    type: "lyzr-native",
+    position: { x: 220, y: 180 },
+    data: {
+      label: "Safe AI (Input)",
+      description: "PII · Toxicity · Prompt injection",
+      type: "lyzr-native",
+      meta: { scope: "" },
+    } as AgentDetail,
+  },
   // Policy Enforcement Layer (unified)
   {
     id: "policy",
     type: "policy",
-    position: { x: 220, y: 180 },
+    position: { x: 500, y: 180 },
     data: {
       label: "Policy Enforcement Layer",
       description: "Unified governance checkpoint",
@@ -173,18 +185,6 @@ const initialNodes: Node[] = [
       role: "Controls data access, tool authorization, and output sanitization.",
       instructions:
         "Data access: Checks classification, owner, tenant, allowed_roles.\nTool authorization: Structured LLM planning + policy enforcement.\nOutput sanitization: Automatic PII/sensitive data masking.\n\nDeny behaviors: deny, redact, filter, escalate, strip, mask, block.",
-    } as AgentDetail,
-  },
-  // Lyzr native: Safe AI Input
-  {
-    id: "safe-ai-input",
-    type: "lyzr-native",
-    position: { x: 500, y: 180 },
-    data: {
-      label: "Safe AI (Input)",
-      description: "PII · Toxicity · Prompt injection",
-      type: "lyzr-native",
-      meta: { scope: "" },
     } as AgentDetail,
   },
   // Lyzr Agent
@@ -223,9 +223,9 @@ const initialNodes: Node[] = [
 ];
 
 const initialEdges: Edge[] = [
-  { id: "e-trigger-policy", source: "trigger", target: "policy", style: EDGE_LINE_STYLE, markerEnd: EDGE_MARKER },
-  { id: "e-policy-safeai", source: "policy", target: "safe-ai-input", style: EDGE_LINE_STYLE, markerEnd: EDGE_MARKER },
-  { id: "e-safeai-agent", source: "safe-ai-input", target: "lyzr-agent", style: EDGE_LINE_STYLE, markerEnd: EDGE_MARKER },
+  { id: "e-trigger-safeai", source: "trigger", target: "safe-ai-input", style: EDGE_LINE_STYLE, markerEnd: EDGE_MARKER },
+  { id: "e-safeai-policy", source: "safe-ai-input", target: "policy", style: EDGE_LINE_STYLE, markerEnd: EDGE_MARKER },
+  { id: "e-policy-agent", source: "policy", target: "lyzr-agent", style: EDGE_LINE_STYLE, markerEnd: EDGE_MARKER },
   { id: "e-agent-output-proc", source: "lyzr-agent", target: "output-processing", style: EDGE_LINE_STYLE, markerEnd: EDGE_MARKER },
   { id: "e-output-proc-output", source: "output-processing", target: "output", style: EDGE_LINE_STYLE, markerEnd: EDGE_MARKER },
 ];
@@ -241,7 +241,7 @@ function SideOverlay({ node, onClose }: { node: Node; onClose: () => void }) {
       <div className="flex items-start justify-between px-6 py-4 border-b border-stone-100">
         <div>
           <p className="text-xs text-stone-400 mb-0.5">
-            {d.type === "agent" ? "Lyzr Agent" : d.type === "policy" ? "Policy Enforcement Layer (POC)" : d.type === "lyzr-native" ? "Lyzr Native" : d.type}
+            {d.type === "agent" ? "Lyzr Agent" : d.type === "policy" ? "Policy Enforcement Layer" : d.type === "lyzr-native" ? "Lyzr Native" : d.type}
           </p>
           <h2 className="text-base font-semibold text-stone-800">{d.label}</h2>
         </div>
@@ -352,7 +352,7 @@ function Legend() {
   const items = [
     { color: "bg-stone-100 border-stone-300", label: "Trigger / Output" },
     { color: "bg-amber-50 border-amber-300", label: "Lyzr Native" },
-    { color: "bg-indigo-50 border-indigo-400", label: "Policy Enforcement Layer (POC)" },
+    { color: "bg-indigo-50 border-indigo-400", label: "Policy Enforcement Layer" },
     { color: "bg-white border-stone-700", label: "Lyzr Agent" },
   ];
   return (

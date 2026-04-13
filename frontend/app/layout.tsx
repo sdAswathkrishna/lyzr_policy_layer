@@ -25,7 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <nav className="bg-white border-b border-gray-200 px-6 py-3 flex items-center gap-8 shadow-sm">
           <span className="font-bold text-lg text-indigo-700">Lyzr Policy Layer</span>
           <span className="text-xs text-gray-400 border border-gray-200 rounded px-2 py-0.5">
-            POC — integrated with Lyzr APIs
+            Integrated with Lyzr APIs
           </span>
           <div className="flex gap-6 ml-4">
             {navItems.map((item) => (

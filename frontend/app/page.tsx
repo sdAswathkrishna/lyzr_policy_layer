@@ -31,7 +31,7 @@ export default function Dashboard() {
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <p className="text-sm text-gray-400">
-          POC control-plane — integrated with Lyzr APIs, not inside Lyzr&apos;s native runtime
+          Policy Enforcement Layer — integrated with Lyzr APIs
         </p>
       </div>
 

@@ -175,7 +175,7 @@ class OutputSanitizer:
                 policy_name=result.matched_policy_name,
                 deny_behavior=behavior,
                 request_id=identity.request_id,
-                audit_id=identity.request_id,
+                audit_id=result.audit_id or identity.request_id,
             )
             return None, denied
 
@@ -204,7 +204,7 @@ class OutputSanitizer:
             policy_name=result.matched_policy_name,
             deny_behavior=behavior,
             request_id=identity.request_id,
-            audit_id=identity.request_id,
+            audit_id=result.audit_id or identity.request_id,
         )
         return None, denied
 
